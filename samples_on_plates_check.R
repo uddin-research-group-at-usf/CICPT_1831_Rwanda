@@ -5,10 +5,14 @@
 # given for platting and output after running the data on chips
 
 
+# Scientific to decimal
+options(scipen = 999)
+
 # load input sample sheet given to run on chips
 # this sample sheet is prepared to run data on chips
-samples <-  read.csv(file.choose(), header = TRUE)
-head(sample)
+samples <-  read.csv("/Users/hussainwani/Rawanda_CICPT_1831/Microarray_Methylation_Sample_Submission_Form_v2_3_8_19_Graham.csv", 
+                     header = TRUE, skip = 10)
+head(samples)
 
 ## extract sample.name and plate.well information
 samples_subs <- samples[, c("Sample.Name", "Plate.Well")]
@@ -19,7 +23,8 @@ head(samples_subs)
 # load output sample sheet after running chips
 # this sample sheet will be with the idat files 
 # after running chips
-sample_sheet <- read.csv(file.choose(), header = TRUE)
+sample_sheet <- read.csv("/Users/hussainwani/Rawanda_CICPT_1831/UddinMethylationSampleSheet2019.csv",
+                         header = TRUE, skip = 7)
 head(sample_sheet)
 
 
@@ -49,8 +54,8 @@ colnames(original_sheet) <- c("Sample_Name", "Plate_Well")
 
 
 # replace '0' with '-' and then remove '-'
-substr(original_sheet$Plate.Well[1:72], 2, 2) <- '-'
-original_sheet$Plate.Well <- gsub("-", "", original_sheet$Plate.Well)
+substr(original_sheet$Plate_Well[1:72], 2, 2) <- '-'
+original_sheet$Plate_Well <- gsub("-", "", original_sheet$Plate_Well)
 
 # replace in output sample sheet
 out_samp_sheet <- replace_special(sample_sheet, "Sample_Name")
@@ -59,8 +64,11 @@ head(out_samp_sheet)
 
 # merge by sample well / plate well
 merged_dat <- unique(merge(out_samp_sheet, original_sheet, by.x = "Sample_Well", by.y = "Plate_Well"))
+head(merged_dat)
 
 # if true all samples are at correct place
 if(!all(merged_dat$Sample_Name.x == merged_dat$Sample_Name.y))
   stop("Samples are not at desired location on chips")
+
+message("All samples are at the desired location")
 
