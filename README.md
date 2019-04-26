@@ -4,4 +4,4 @@
 Run `samples_on_plates_check.R` file. 
 2. Discordant sex check need to be done to check if the gender on input sample sheet matched with the data generated. Run `Disccordant_Sex_check.R`
 4. Cross-hybridizing probes file which is used for quality control to remove the probes can be prepared by running `MkCrossHybridData.R`
-3. Once platting testing is done, quality control is performed
+3. Once platting testing is done, quality control is performed by running `Quality_control_RawandaEWAS.R`.
