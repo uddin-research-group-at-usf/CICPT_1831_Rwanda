@@ -2,11 +2,11 @@
 library(tibble)
 
 
-# Scripts to perfomr discordant sex check
+# Scripts to perform discordant sex check
 
 
 # Scientific to decimal
-# Pay attention to this, as some R version append 0's to everthing
+# Pay attention to this, as some R version append 0's to everything scientific
 options(scipen = 999)
 
 
