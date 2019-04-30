@@ -6,3 +6,4 @@ Run `samples_on_plates_check.R` file.
 3. Cross-hybridizing probes file which is used for quality control to remove the probes can be prepared by running `MkCrossHybridData.R`
 4. Run `PreprocessNoob.R` for preprocessing using `Noob` method.
 5. Once platting testing is done, quality control is performed by running `Quality_control_RawandaEWAS.R`.
+6. For PCA to find the variation in the data run `Combat_PCA.R`
