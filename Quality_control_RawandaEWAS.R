@@ -1,4 +1,7 @@
 
+# Run BMIQ preprocessing and normalization
+
+
 library(data.table)
 library(RPMM)
 
@@ -28,8 +31,8 @@ mean(is.na(methy_data))
 sum(is.na(methy_data))
 
 
-
 # Extract information from the main data file
+# Extract Beta, signalA, signalB, and detection pvalues
 extract_info <- function(ext_col, data, out_file){
   
   ext_data <- methy_data[, grep(ext_col, colnames(methy_data))]
@@ -43,10 +46,6 @@ extract_info <- function(ext_col, data, out_file){
 }
 
 
-
-## Extract beta values
-## avg data is saved to match with other data
-## to make sure the col names and row names are same
 
 # Extract beta values
 extract_info(".AVG_Beta", methy_data, "CICPT_1831_beta_RAW.Rdata")
@@ -66,8 +65,7 @@ extract_info(".Detection", Methy_data, "CICPT_1831_detectP_RAW.Rdata")
 
 
 # load .Rdata file
-# no need to load the data if you have run the above code in the same session
-# if running this section of the code without running above code
+# these file are saved in the local working directory when running the above code
 # should have generated the data and saved
 
 beta_vals = local(get(load('CICPT_1831_beta_RAW.Rdata')))
@@ -88,6 +86,7 @@ if(!all(colnames(beta_vals) == colnames(signal_A)) |
    !all(colnames(beta_vals) == colnames(dect_pval))|
    !all(rownames(beta_vals) == rownames(dect_pval)))
   stop("colnames names or row names do not match")
+message("order of matrices is fine")
 
 
 
@@ -95,9 +94,9 @@ if(!all(colnames(beta_vals) == colnames(signal_A)) |
 # ----------------------------------------------------------------------------- #
 
 library(CpGassoc)
+library(minfi)
 
-
-#remove probes with low signal intensity and too many missing values
+# remove probes with low signal intensity and too many missing values
 # We set detection p-value threshold to 0.001
 # We remove any CpGs with more than 10% missing data across the samples
 beta.qc <- cpg.qc(beta.orig = beta_vals, siga = signal_A, 
@@ -108,7 +107,11 @@ densityPlot(beta.qc, main = "Pre-Normalization CICPT-1831-Methylation EPIC-ARRAY
 
 # "Removed 0 samples with low signal"
 # "Removed 6092 CpG sites with missing data for > 0.1 of samples"
-save(beta.qc, file="CICPT-1831_beta_QC.Rdata")
+save(beta.qc, file = "CICPT-1831_beta_QC.Rdata")
+
+# if not existing
+if(!exists("beta.qc"))
+   beta.qc <- local(get(load("CICPT-1831_beta_QC.Rdata")))
 
 
 
@@ -133,7 +136,8 @@ sum(is.na(match(rm_probes, rownames(beta.qc)))) # 419 #Some may have already bee
 rm_probes <- rm_probes[!is.na(match(rm_probes, rownames(beta.qc)))]
 sum(is.na(match(rm_probes, rownames(beta.qc)))) # should be 0
 
-beta.qc <- beta.qc[-match(rm_probes, rownames(beta.qc)),]
+# removing
+beta.qc <- beta.qc[-match(rm_probes, rownames(beta.qc)), ]
 
 
 
@@ -177,7 +181,7 @@ sum(is.na(design_v[type1_probes, ])) #0 #check to see if there are any missing d
 
 
 
-type2_probes<-rownames(annot_file[annot_file[, "Infinium_Design_Type"] == "II", ])
+type2_probes <- rownames(annot_file[annot_file[, "Infinium_Design_Type"] == "II", ])
 
 #populate matrix with 2 into cells where the CpG sites are detected by Type II probes
 design_v[type2_probes,] <- 2 
@@ -211,12 +215,10 @@ sum(is.na(beta.qc))
 length(design_v) 
 
 
-sum(is.na(beta.qc)) 
-
 
 #loop function to run BMIQ on each sample. sampleID is defined so the output should generate 
 #actual participantID (sentrixID or BarcodeID) in the title of each plot
-
+passed_samps <- list()
 for(sample in 1:ncol(beta.qc)){
   tryCatch({
     beta.v <- beta.qc[, sample]
@@ -224,12 +226,37 @@ for(sample in 1:ncol(beta.qc)){
     bmiqTemp <- BMIQ(beta.v = beta.v, design.v = design_v, sampleID = samp_ID) 
     beta.qc[, sample] <- bmiqTemp$nbeta
     message("Processing sample ", sample, ": ", colnames(beta.qc)[sample],  "... done\n" )
+    passed_samps[[length(passed_samps) + 1]] <- colnames(beta.qc)[sample]
   },error = function(err){
     message("Normalization failed for sample ", sample, ": ", colnames(beta.qc)[sample] )
     message(err, "\n")
   }
   )
+}
+
+
+
+# check if any sample failed
+failed_samps <- colnames(beta.qc[ ,which(!passed_samps %in% colnames(beta.qc))])
+
+#load data to get information of missing samples
+combined_data <- local(get(load("CICPT_1831_data_with_gender.Rdata")))
+
+
+if(is.null(failed_samps)){
+  message("All samples normalized")
+}else{message("Some samples failed normalization")
+  failed_samp_info <- lapply(failed_samps, 
+                             function(x) combined_data[combined_data$sentid_sentpos == x, ])
   }
+
+
+#rbind
+failed_samps_tg <- do.call(rbind, failed_samp_info)
+
+# Failed samples for normalization
+write.csv(failed_samps_tg, "Sample_failed_BMIQ_normalization.csv", row.names = F)
+
 
 
 bmiq_data <- beta.qc
@@ -240,8 +267,5 @@ save(bmiq_data, design_v, file="CICPT_1831_beta_BMIQ_FULL_bySample_RemovedCrossH
 
 # plot
 densityPlot(bmiq_data, main = "Normalized CICPT-1831-Methylation EPIC-ARRAY 850K NS= 80")
-
-
-
 
 
