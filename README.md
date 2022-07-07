@@ -7,3 +7,4 @@ Run `samples_on_plates_check.R` file. All the samples need to be at desired loca
 4. Run `PreprocessNoob.R` for preprocessing using `Noob` method.
 5. Quality control test can be performed by running `Quality_control_RawandaEWAS.R`. This will try to remove the missing values, perform normalization and plot density plots.
 6. For PCA to find the variation in the data run `Combat_PCA.R`. This is done to remove batch effects.
+7. To run analysis on pre-processed and quality controlled data, run `mcSEA_on_Top_variable_Probes_clean.R` file. 
