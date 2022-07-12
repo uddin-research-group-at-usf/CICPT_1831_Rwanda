@@ -1,0 +1,236 @@
+---
+title: "Untitled"
+author: "Janelle Donglasan"
+date: "7/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages and functions
+
+```{r, warning=FALSE,messages = FALSE}
+# Path to the source file required to install the packages
+# change is according to the address on your computer
+source("scripts/install_needed_packages.R") # PATH TO SOURCE FILE install_needed_packages.R
+
+
+# Before we start QC, we need to install some packages
+need_packages <- c("feather","data.table","lmerTest","readxl","emmeans","psycho","dplyr",
+                   "tibble", "lumi", "tibble", "lumi", "effects", "ggplot2", "stabs","ggpubr", "c060")
+
+
+# Install by running the function
+install_cran_pkgs(pkgs = need_packages)
+
+
+# Check if all the packages we needed are installed
+check_installed(pkgs = need_packages)
+
+
+# Load all packages, if needed
+lapply(need_packages , require, character.only = TRUE )
+
+# Load functions for analyses
+source("scripts/EWAS_func.R")
+```
+
+## Loading and cleaning data for analysis 
+
+```{r}
+# load DMRs
+mom_dmrs <- read_excel("data/Mothers.xlsx")
+colnames(mom_dmrs)[1] <- "DMR"
+child_dmrs <- read_excel("data/Children.xlsx")
+colnames(child_dmrs)[1] <- "DMR"
+common_dmrs <- read_excel("data/Common Children and Mothers.xlsx")
+colnames(common_dmrs)[1] <- "DMR"
+
+
+# load phenotype and methylation data
+pheno <- read.csv("data/pheno_final_59_matched.csv")
+meth <- read_feather("data/Rwanda_Noob_QCd_Combat_adj.feather")
+meth <- column_to_rownames(meth, "rowname")
+
+# convert methylation beta value to M-value, scale then transform
+meth <- as.data.frame(beta2m(meth))
+meth <- as.data.frame(t(as.matrix(meth)))
+meth$ave_meth <- rowMeans(meth,na.rm = TRUE)
+
+# create column indicating child/mother
+pheno$role <- ifelse(pheno$New.Code %like% "K", "child","mother")
+
+# scale covariates for model
+to_scale <- c("Mono", "Neu", "CD8T", "CD4T", "Bcell", "NK", "Age")
+pheno[to_scale ] <- scale(pheno[to_scale])
+
+# change binary variables as factor
+pheno$Gender[pheno$Gender == ""] <- NA
+pheno$Gender <- as.factor(pheno$Gender)
+levels(pheno$Gender) <- c(0,1)  # Male = 1, Female = 0
+pheno$role <- as.factor(pheno$role)
+pheno$Exposure <- as.factor(pheno$Exposure)
+levels(pheno$Exposure) <- c(0,1) 
+
+# change data from long format to wide format 
+
+keep <- c("Row.names","Exposure","CD8T","CD4T","NK","Bcell","Mono", "Neu", "Gender", "Age", "family","role")
+
+df_child <- pheno[pheno$role == "child",]
+df_child <- df_child[colnames(df_child) %in% keep]
+colnames(df_child)[1] <- "ID" 
+df_child <- merge(df_child, meth, by.x = "ID", by.y = 0 )
+colnames(df_child) <- paste0("C_",colnames(df_child))
+
+df_mom <- pheno[pheno$role == "mother",]
+df_mom<- df_mom[colnames(df_mom) %in% keep]
+colnames(df_mom)[1] <- "ID" 
+df_mom <- merge(df_mom, meth, by.x = "ID", by.y = 0 )
+colnames(df_mom) <- paste0("M_",colnames(df_mom))
+
+df <- merge(df_child,df_mom,by.x = "C_family", by.y = "M_family")
+df$M_Age[df$M_Age == "NA"] <- NA
+cdf <- df[!is.na(df$M_Age),]
+
+# Converting factor to numeric
+cdf$C_Gender <- as.numeric(as.character(cdf$C_Gender))
+cdf$M_Exposure <- as.numeric(as.character(cdf$M_Exposure))
+```
+
+## Set seed
+
+```{r}
+set.seed(8021)
+```
+
+## Get Linear Regression Results
+
+`get_all_lm()` 
+
+**Description**
+This function runs the top three highly enriched CpGs of each DMR in mothers using the data frame output of mCSEATest() from the mcSEA package. Each highly enriched CpG is then taken from the wide format data frame provided. This data frame should have all phenotype and methylation data combined with child cpgs indicated with a "C_" in front (ex. C_cg01675618) and mothers having "M_" in front in the columns; families should be matched in each row. Accounting for the variables specified in the *indep* parameter, this function runs linear regression for each highly enriched cpgs with the mothers methylation as dependent and her childs methylation as independent. 
+
+**Arguments**
+
+*dmrs* - data frame from mCSEATest() from the mCSEA package. ```myResults[["promoters"]]```
+
+*indep* - character vector of columns in *df* to be independent variables in the linear model.
+
+*df* - wide format data frame with combined phenotype and methylation data. Methylation data of children should be indicated with "C_" in the beginning of the column name. Methylation data of mothers should be indicated with "M_" in the beginning of the column name. 
+
+```{r}
+indep <- c("M_Exposure","M_Age","C_Gender",  "C_CD8T" , "C_CD4T" ,"C_NK" , "C_Bcell" , "C_Mono" , "C_Neu")
+
+lm_res <- get_all_lm(mom_dmrs,indep,cdf) 
+```
+
+
+
+## Get Ridge Regression Results 
+
+`get_all_rr()` 
+
+**Description**
+Function to run ridge regression for top three enriched CpGs of DMRs in mothers. This function is similar to `get_all_lm()` but implements ridge regression. Specify argument *plotdr* to where you want the trace plots. 
+
+```{r}
+rr_res <- get_all_rr(mom_dmrs,indep,cdf, plotdir = "output/rr_plots/")
+```
+
+
+
+## Compare models using AIC 
+
+```{r, message = FALSE}
+#  Gets AIC of Ridge Regression models from `get_all_rr()`
+rr_AIC <- rr_AIC(mom_dmrs,indep,cdf)
+
+# Gets AIC of Linear Regression model`get_all_lm()`
+lm_AIC <- lm_AIC(mom_dmrs,indep,cdf)
+
+```
+
+
+
+## Get Stability Selection Results
+
+`get_all_ss()` 
+
+**Description**
+Function to run stability selection for top three enriched CpGs of DMRs in mothers. Arguments similar to `get_all_lm()` and `get_all_rr`.
+
+```{r}
+ss_res <- get_all_ss(mom_dmrs,indep,cdf)
+```
+
+
+
+## Get EMMs and EMM Plot
+
+```{r}
+# Gets emms of ridge regression. Arguments similar to `get_all_rr`.
+rr_emm <- rr_emm(mom_dmrs,indep,cdf)
+
+# DMRs highly associated with in utero genocide exposure
+dmrs_exps <- c("BCOR","PRDM8", "VWDE")
+
+# Averages emm for each DMR
+ave_rr_emm <- combine_emm(rr_emm, dmrs_exps)
+
+# Save emm plots
+png("figures/EWAS_fig_EMM.v1.png", width = 1300, height = 900, res = 120)
+
+p <- ggplot(ave_rr_emm,
+                 aes(x = group, y = emm, ymin =emm-(se), ymax = emm+(se), color = DMR))
+p + 
+  geom_errorbar(width = 0.5,size = 1.1, position = position_dodge(.5)) +
+  geom_point(aes(color = DMR),size = 3,position = position_dodge(.5)) +
+
+  scale_color_manual(name = "DMR*",
+                     values = c("#E18727FF","#20854EFF","#7876B1FF"),
+                     labels = c(expression(italic("BCOR")),expression(italic("PRDM8")),expression(italic("VWDE"))) )+ 
+  ggpubr::theme_pubr() +
+  ylab("Estimated Marginal Means \nChild Methylation") +
+      font("caption", size =14, face= "bold") +
+  
+  theme(axis.text=element_text(size=18),
+        axis.title=element_text(size=24),
+        plot.caption = element_text(hjust = -.05,face="bold"),
+        plot.tag = element_text(size = 13,hjust = -.05),
+        plot.tag.position = c(.534, 0),
+        plot.margin=unit(c(1,1,1.5,1.2),"cm"),
+        legend.title=element_text(size=14), 
+        legend.text=element_text(size=14)) +
+  labs(caption = "\n\n*Top 3 Highly Enriched CpGs of each DMR:",
+       tag = substitute(atop(
+         atop(displaystyle(paste( "                         "))),
+         atop(displaystyle(paste(italic("BCOR"), " = cg15627188, cg02931660, cg02932805")),
+              atop(displaystyle(paste(italic("PRDM8"), " = cg18073471, cg05059566, cg06307913")),
+                   atop(displaystyle(paste(italic("VWDE"), " = cg03579179, cg06484146, cg20607287")))
+              )))) )
+
+dev.off()
+```
+
+
+
+## Save Results
+```{r}
+# Saving results for just DMRs highly associated with genocide exposure
+write.csv(save_df(rr_res, dmrs_exps),"output/RR_results_highly_exposed_DMRS.csv",row.names = FALSE)
+write.csv(save_df(ss_res,dmrs_exps), "output/SS_results_highly_exposed_DMRS.csv",row.names = FALSE)
+
+# Saving results for all DMRs
+write.csv(save_df(rr_res),"output/RR_results_all_DMRS.csv",row.names = FALSE)
+write.csv(save_df(lm_res),"output/LM_results_all_DMRS.csv",row.names = FALSE)
+write.csv(save_df(ss_res), "output/SS_results_all_DMRS.csv",row.names = FALSE)
+```
+
+
+
+```{r}
+sessionInfo()
+```
+
