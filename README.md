@@ -10,6 +10,6 @@ Run `samples_on_plates_check.R` file. All the samples need to be at desired loca
 7. To run analysis on pre-processed and quality controlled data, run `mcSEA_on_Top_variable_Probes_clean.R` file https://doi.org/10.2217/epi-2021-0310. 
 8. Use `Ridge_regression.R` to perform Ridge regression analysis.
 
-# Supplementary Files**
+# Supplementary Files
 1. Suplementary table 1 is referenced in our paper and available as a supplementary file.
 2. During the review of our manuscript, we were asked to conduct DMR analyses on the full set of QC'd Epic data (818,720 probes). We found 233 DMRs in children and 1,111 DMRs in mothers. These have been provided as Supplementary Tables 2 and 3, respectively, but are not referenced directly in the paper itself.
